@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Users, Plus, UserMinus, Target, TrendingUp, Award, AlertCircle } from "lucide-react"
+import { Users, Plus, UserMinus, Target, TrendingUp, Award, AlertCircle, Brain } from "lucide-react"
 import { AddPlayerModal } from "./AddPlayerModal"
 import { RemovePlayerModal } from "./RemovePlayerModal"
 import { createClient } from "@/lib/supabase/client"
@@ -23,15 +23,23 @@ interface DatabasePlayer {
     acs: number
     headshot_percentage: number
     match_result: string
+    agent_used?: string
+  }[]
+  weapon_statistics?: {
+    weapon_name: string
+    kills: number
+    accuracy: number
   }[]
   created_at: string
+  aiAnalysisData?: any
 }
 
 interface TeamManagementProps {
   teamId: string
+  onPlayersUpdate?: (players: DatabasePlayer[]) => void
 }
 
-export function TeamManagement({ teamId }: TeamManagementProps) {
+export function TeamManagement({ teamId, onPlayersUpdate }: TeamManagementProps) {
   const [players, setPlayers] = useState<DatabasePlayer[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +56,16 @@ export function TeamManagement({ teamId }: TeamManagementProps) {
     try {
       setLoading(true)
 
-      // Try to fetch real data first with proper join
+      // Try to get players from localStorage first (for immediate updates)
+      const localPlayers = localStorage.getItem(`team_${teamId}_players`)
+      if (localPlayers) {
+        const parsedPlayers = JSON.parse(localPlayers)
+        setPlayers(parsedPlayers)
+        calculateTeamStats(parsedPlayers)
+        if (onPlayersUpdate) onPlayersUpdate(parsedPlayers)
+      }
+
+      // Try to fetch real data from database
       const { data: realPlayers, error: fetchError } = await supabase
         .from("team_members")
         .select(`
@@ -60,60 +77,80 @@ export function TeamManagement({ teamId }: TeamManagementProps) {
           users!inner(
             full_name,
             email
-          )
+          ),
+          player_statistics(*),
+          weapon_statistics(*)
         `)
         .eq("team_id", teamId)
 
       if (fetchError) {
-        console.warn("Database fetch failed, using mock data:", fetchError)
-        // Fall back to mock data if database isn't set up
-        const mockPlayers: DatabasePlayer[] = [
-          {
-            id: "1",
-            full_name: "Alex Chen",
-            valorant_username: "PhoenixFire",
-            valorant_tag: "#1234",
-            primary_role: "Duelist",
-            current_rank: "Immortal 2",
-            player_statistics: [
-              {
-                kills: 18,
-                deaths: 14,
-                acs: 245,
-                headshot_percentage: 28.5,
-                match_result: "win",
-              },
-              {
-                kills: 22,
-                deaths: 16,
-                acs: 267,
-                headshot_percentage: 31.2,
-                match_result: "win",
-              },
-            ],
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: "2",
-            full_name: "Sarah Kim",
-            valorant_username: "ViperQueen",
-            valorant_tag: "#5678",
-            primary_role: "Controller",
-            current_rank: "Immortal 1",
-            player_statistics: [
-              {
-                kills: 15,
-                deaths: 13,
-                acs: 198,
-                headshot_percentage: 24.8,
-                match_result: "win",
-              },
-            ],
-            created_at: new Date().toISOString(),
-          },
-        ]
-        setPlayers(mockPlayers)
-        calculateTeamStats(mockPlayers)
+        console.warn("Database fetch failed, using local/mock data:", fetchError)
+
+        // If no local data, use mock data
+        if (!localPlayers) {
+          const mockPlayers: DatabasePlayer[] = [
+            {
+              id: "mock_1",
+              full_name: "Alex Chen",
+              valorant_username: "PhoenixFire",
+              valorant_tag: "#1234",
+              primary_role: "Duelist",
+              current_rank: "Immortal 2",
+              player_statistics: [
+                {
+                  kills: 18,
+                  deaths: 14,
+                  acs: 245,
+                  headshot_percentage: 28.5,
+                  match_result: "win",
+                  agent_used: "Jett",
+                },
+                {
+                  kills: 22,
+                  deaths: 16,
+                  acs: 267,
+                  headshot_percentage: 31.2,
+                  match_result: "win",
+                  agent_used: "Reyna",
+                },
+              ],
+              weapon_statistics: [
+                { weapon_name: "Vandal", kills: 45, accuracy: 23 },
+                { weapon_name: "Phantom", kills: 32, accuracy: 28 },
+              ],
+              created_at: new Date().toISOString(),
+            },
+            {
+              id: "mock_2",
+              full_name: "Sarah Kim",
+              valorant_username: "ViperQueen",
+              valorant_tag: "#5678",
+              primary_role: "Controller",
+              current_rank: "Immortal 1",
+              player_statistics: [
+                {
+                  kills: 15,
+                  deaths: 13,
+                  acs: 198,
+                  headshot_percentage: 24.8,
+                  match_result: "win",
+                  agent_used: "Viper",
+                },
+              ],
+              weapon_statistics: [
+                { weapon_name: "Vandal", kills: 28, accuracy: 21 },
+                { weapon_name: "Spectre", kills: 15, accuracy: 35 },
+              ],
+              created_at: new Date().toISOString(),
+            },
+          ]
+          setPlayers(mockPlayers)
+          calculateTeamStats(mockPlayers)
+          if (onPlayersUpdate) onPlayersUpdate(mockPlayers)
+
+          // Save mock data to localStorage
+          localStorage.setItem(`team_${teamId}_players`, JSON.stringify(mockPlayers))
+        }
       } else {
         // Transform real data to match our interface
         const transformedPlayers: DatabasePlayer[] = (realPlayers || []).map((player: any) => ({
@@ -123,40 +160,21 @@ export function TeamManagement({ teamId }: TeamManagementProps) {
           valorant_tag: player.valorant_tag || "#0000",
           primary_role: player.primary_role,
           current_rank: player.rank,
-          player_statistics: [], // We'll fetch this separately if needed
+          player_statistics: player.player_statistics || [],
+          weapon_statistics: player.weapon_statistics || [],
           created_at: new Date().toISOString(),
         }))
 
         setPlayers(transformedPlayers)
         calculateTeamStats(transformedPlayers)
+        if (onPlayersUpdate) onPlayersUpdate(transformedPlayers)
+
+        // Save to localStorage for immediate access
+        localStorage.setItem(`team_${teamId}_players`, JSON.stringify(transformedPlayers))
       }
     } catch (err) {
       console.error("Error fetching players:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch players")
-
-      // Still show mock data on error
-      const mockPlayers: DatabasePlayer[] = [
-        {
-          id: "1",
-          full_name: "Alex Chen",
-          valorant_username: "PhoenixFire",
-          valorant_tag: "#1234",
-          primary_role: "Duelist",
-          current_rank: "Immortal 2",
-          player_statistics: [
-            {
-              kills: 18,
-              deaths: 14,
-              acs: 245,
-              headshot_percentage: 28.5,
-              match_result: "win",
-            },
-          ],
-          created_at: new Date().toISOString(),
-        },
-      ]
-      setPlayers(mockPlayers)
-      calculateTeamStats(mockPlayers)
     } finally {
       setLoading(false)
     }
@@ -210,12 +228,40 @@ export function TeamManagement({ teamId }: TeamManagementProps) {
     })
   }
 
-  const handlePlayerAdded = () => {
-    fetchPlayers()
+  const handlePlayerAdded = (newPlayerData: DatabasePlayer) => {
+    console.log("Adding new player:", newPlayerData)
+
+    // Update the players list immediately
+    const updatedPlayers = [...players, newPlayerData]
+    setPlayers(updatedPlayers)
+    calculateTeamStats(updatedPlayers)
+
+    // Save to localStorage for persistence
+    localStorage.setItem(`team_${teamId}_players`, JSON.stringify(updatedPlayers))
+
+    // Notify parent component
+    if (onPlayersUpdate) {
+      onPlayersUpdate(updatedPlayers)
+    }
+
+    // Trigger a re-fetch to sync with database if available
+    setTimeout(() => {
+      fetchPlayers()
+    }, 1000)
   }
 
-  const handlePlayerRemoved = () => {
-    fetchPlayers()
+  const handlePlayerRemoved = (playerId: string) => {
+    const updatedPlayers = players.filter((p) => p.id !== playerId)
+    setPlayers(updatedPlayers)
+    calculateTeamStats(updatedPlayers)
+
+    // Save to localStorage
+    localStorage.setItem(`team_${teamId}_players`, JSON.stringify(updatedPlayers))
+
+    // Notify parent component
+    if (onPlayersUpdate) {
+      onPlayersUpdate(updatedPlayers)
+    }
   }
 
   const getPlayerStats = (player: DatabasePlayer) => {
@@ -255,6 +301,43 @@ export function TeamManagement({ teamId }: TeamManagementProps) {
         return "bg-blue-600"
       default:
         return "bg-gray-600"
+    }
+  }
+
+  const generateAIAnalysisForPlayer = async (player: DatabasePlayer) => {
+    try {
+      const response = await fetch("/api/ai/recommendations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          playerId: player.id,
+          teamId: teamId,
+          playerData: player.aiAnalysisData || {
+            playerId: player.id,
+            playerName: player.full_name,
+            role: player.primary_role,
+            recentStats: {
+              averageKD: getPlayerStats(player).kd,
+              averageACS: getPlayerStats(player).acs,
+              headshotPercentage: getPlayerStats(player).headshotPercentage,
+              winRate: getPlayerStats(player).winRate,
+              mostUsedAgents: player.player_statistics?.map((s) => s.agent_used).filter(Boolean) || [],
+              preferredWeapons: player.weapon_statistics?.map((w) => w.weapon_name) || [],
+            },
+            strengths: [],
+            weaknesses: [],
+          },
+        }),
+      })
+
+      if (response.ok) {
+        const aiResults = await response.json()
+        console.log(`AI analysis generated for ${player.full_name}:`, aiResults)
+      }
+    } catch (error) {
+      console.error("Failed to generate AI analysis:", error)
     }
   }
 
@@ -327,11 +410,11 @@ export function TeamManagement({ teamId }: TeamManagementProps) {
                 Team Management
               </CardTitle>
               <CardDescription className="text-gray-400">
-                Manage your team roster and player information
+                Manage your team roster and player information. Added players will appear in analytics and AI training.
               </CardDescription>
             </div>
             <AddPlayerModal onPlayerAdded={handlePlayerAdded} teamId={teamId}>
-              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              <Button className="bg-green-600 hover:bg-green-700">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Player
               </Button>
@@ -343,7 +426,7 @@ export function TeamManagement({ teamId }: TeamManagementProps) {
             <Alert className="bg-yellow-900/20 border-yellow-500/20 mb-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-yellow-400">
-                Database connection issue. Showing demo data. Error: {error}
+                Database connection issue. Using local storage. Error: {error}
               </AlertDescription>
             </Alert>
           )}
@@ -352,7 +435,10 @@ export function TeamManagement({ teamId }: TeamManagementProps) {
             <div className="text-center py-8">
               <Users className="h-12 w-12 text-gray-600 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-400 mb-2">No Players Added</h3>
-              <p className="text-gray-500 mb-4">Start building your team by adding your first player.</p>
+              <p className="text-gray-500 mb-4">
+                Start building your team by adding your first player. They will immediately appear in analytics and AI
+                training.
+              </p>
               <AddPlayerModal onPlayerAdded={handlePlayerAdded} teamId={teamId}>
                 <Button className="bg-green-600 hover:bg-green-700">
                   <Plus className="h-4 w-4 mr-2" />
@@ -396,15 +482,26 @@ export function TeamManagement({ teamId }: TeamManagementProps) {
                         <div className="text-sm text-gray-400">HS: {stats.headshotPercentage}%</div>
                         <div className="text-sm text-green-500">WR: {stats.winRate}%</div>
                       </div>
-                      <RemovePlayerModal player={player} onPlayerRemoved={handlePlayerRemoved}>
+                      <div className="flex items-center space-x-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                          onClick={() => generateAIAnalysisForPlayer(player)}
+                          className="text-purple-400 hover:text-purple-300 hover:bg-purple-900/20"
+                          title="Generate AI Analysis"
                         >
-                          <UserMinus className="h-4 w-4" />
+                          <Brain className="h-4 w-4" />
                         </Button>
-                      </RemovePlayerModal>
+                        <RemovePlayerModal player={player} onPlayerRemoved={() => handlePlayerRemoved(player.id)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+                          >
+                            <UserMinus className="h-4 w-4" />
+                          </Button>
+                        </RemovePlayerModal>
+                      </div>
                     </div>
                   </div>
                 )
@@ -417,5 +514,4 @@ export function TeamManagement({ teamId }: TeamManagementProps) {
   )
 }
 
-// Default export for easier importing
 export default TeamManagement
