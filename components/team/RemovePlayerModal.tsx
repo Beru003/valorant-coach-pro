@@ -16,7 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertTriangle, Loader2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 
-interface DatabasePlayer {
+interface Databaseteam_members {
   id: string
   full_name: string
   valorant_username: string
@@ -26,7 +26,7 @@ interface DatabasePlayer {
 
 interface RemovePlayerModalProps {
   children: React.ReactNode
-  player: DatabasePlayer
+  player: Databaseteam_members
   onPlayerRemoved: () => void
 }
 
@@ -42,7 +42,7 @@ export function RemovePlayerModal({ children, player, onPlayerRemoved }: RemoveP
     setError(null)
 
     try {
-      const { error: deleteError } = await supabase.from("players").delete().eq("id", player.id)
+      const { error: deleteError } = await supabase.from("team_members").delete().eq("id", player.id)
 
       if (deleteError) throw deleteError
 
