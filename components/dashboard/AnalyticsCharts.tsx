@@ -2,11 +2,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart, Line } from "recharts"
 import { useTeamStats } from "@/hooks/useTeamStats"
-import type { Player } from "@/types" // Import the common Player type
 
 interface AnalyticsChartsProps {
   teamId: string
-  players?: Player[] // Use the common Player type
+  players?: any[] // Assuming players can be any[] for now, or define a more specific Player type if available
 }
 
 export function AnalyticsCharts({ teamId, players }: AnalyticsChartsProps) {

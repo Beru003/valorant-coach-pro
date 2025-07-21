@@ -1,95 +1,96 @@
--- Enable Row Level Security for team_members table
-ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
+-- Enable Row Level Security on all tables
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.team_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.player_statistics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.weapon_statistics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.ai_training_recommendations ENABLE ROW LEVEL SECURITY;
 
--- Policy to allow authenticated users to view their own team's members
-DROP POLICY IF EXISTS "Allow authenticated users to view their team members" ON team_members;
-CREATE POLICY "Allow authenticated users to view their team members"
-ON team_members FOR SELECT
-TO authenticated
-USING (auth.uid() = user_id);
+-- Users policies
+CREATE POLICY "Users can view their own profile" ON public.users
+    FOR SELECT USING (auth.uid() = id);
 
--- Policy to allow authenticated users to insert new team members for their team
-DROP POLICY IF EXISTS "Allow authenticated users to insert team members" ON team_members;
-CREATE POLICY "Allow authenticated users to insert team members"
-ON team_members FOR INSERT
-TO authenticated
-WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own profile" ON public.users
+    FOR UPDATE USING (auth.uid() = id);
 
--- Policy to allow authenticated users to update their own team members
-DROP POLICY IF EXISTS "Allow authenticated users to update their team members" ON team_members;
-CREATE POLICY "Allow authenticated users to update their team members"
-ON team_members FOR UPDATE
-TO authenticated
-USING (auth.uid() = user_id)
-WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Allow user creation during signup" ON public.users
+    FOR INSERT WITH CHECK (auth.uid() = id);
 
--- Policy to allow authenticated users to delete their own team members
-DROP POLICY IF EXISTS "Allow authenticated users to delete their team members" ON team_members;
-CREATE POLICY "Allow authenticated users to delete their team members"
-ON team_members FOR DELETE
-TO authenticated
-USING (auth.uid() = user_id);
+-- Teams policies
+CREATE POLICY "Coaches can view their teams" ON public.teams
+    FOR SELECT USING (auth.uid() = coach_id);
 
--- Enable Row Level Security for player_statistics table
-ALTER TABLE player_statistics ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Coaches can create teams" ON public.teams
+    FOR INSERT WITH CHECK (auth.uid() = coach_id);
 
--- Policy to allow authenticated users to view their own player statistics
-DROP POLICY IF EXISTS "Allow authenticated users to view their player statistics" ON player_statistics;
-CREATE POLICY "Allow authenticated users to view their player statistics"
-ON player_statistics FOR SELECT
-TO authenticated
-USING (EXISTS (SELECT 1 FROM team_members WHERE id = player_id AND user_id = auth.uid()));
+CREATE POLICY "Coaches can update their teams" ON public.teams
+    FOR UPDATE USING (auth.uid() = coach_id);
 
--- Policy to allow authenticated users to insert player statistics for their team members
-DROP POLICY IF EXISTS "Allow authenticated users to insert player statistics" ON player_statistics;
-CREATE POLICY "Allow authenticated users to insert player statistics"
-ON player_statistics FOR INSERT
-TO authenticated
-WITH CHECK (EXISTS (SELECT 1 FROM team_members WHERE id = player_id AND user_id = auth.uid()));
+-- Team members policies
+CREATE POLICY "Team members can view their team data" ON public.team_members
+    FOR SELECT USING (
+        auth.uid() = user_id OR 
+        auth.uid() IN (SELECT coach_id FROM public.teams WHERE id = team_id)
+    );
 
--- Policy to allow authenticated users to update their own player statistics
-DROP POLICY IF EXISTS "Allow authenticated users to update their player statistics" ON player_statistics;
-CREATE POLICY "Allow authenticated users to update their player statistics"
-ON player_statistics FOR UPDATE
-TO authenticated
-USING (EXISTS (SELECT 1 FROM team_members WHERE id = player_id AND user_id = auth.uid()))
-WITH CHECK (EXISTS (SELECT 1 FROM team_members WHERE id = player_id AND user_id = auth.uid()));
+CREATE POLICY "Coaches can manage team members" ON public.team_members
+    FOR ALL USING (
+        auth.uid() IN (SELECT coach_id FROM public.teams WHERE id = team_id)
+    );
 
--- Policy to allow authenticated users to delete their own player statistics
-DROP POLICY IF EXISTS "Allow authenticated users to delete their player statistics" ON player_statistics;
-CREATE POLICY "Allow authenticated users to delete their player statistics"
-ON player_statistics FOR DELETE
-TO authenticated
-USING (EXISTS (SELECT 1 FROM team_members WHERE id = player_id AND user_id = auth.uid()));
+-- Player statistics policies
+CREATE POLICY "Players and coaches can view statistics" ON public.player_statistics
+    FOR SELECT USING (
+        auth.uid() IN (
+            SELECT user_id FROM public.team_members WHERE id = player_id
+            UNION
+            SELECT coach_id FROM public.teams t 
+            JOIN public.team_members tm ON t.id = tm.team_id 
+            WHERE tm.id = player_id
+        )
+    );
 
--- Enable Row Level Security for weapon_statistics table
-ALTER TABLE weapon_statistics ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Coaches can manage statistics" ON public.player_statistics
+    FOR ALL USING (
+        auth.uid() IN (
+            SELECT coach_id FROM public.teams t 
+            JOIN public.team_members tm ON t.id = tm.team_id 
+            WHERE tm.id = player_id
+        )
+    );
 
--- Policy to allow authenticated users to view their own weapon statistics
-DROP POLICY IF EXISTS "Allow authenticated users to view their weapon statistics" ON weapon_statistics;
-CREATE POLICY "Allow authenticated users to view their weapon statistics"
-ON weapon_statistics FOR SELECT
-TO authenticated
-USING (EXISTS (SELECT 1 FROM team_members WHERE id = player_id AND user_id = auth.uid()));
+-- Weapon statistics policies
+CREATE POLICY "Players and coaches can view weapon stats" ON public.weapon_statistics
+    FOR SELECT USING (
+        auth.uid() IN (
+            SELECT user_id FROM public.team_members WHERE id = player_id
+            UNION
+            SELECT coach_id FROM public.teams t 
+            JOIN public.team_members tm ON t.id = tm.team_id 
+            WHERE tm.id = player_id
+        )
+    );
 
--- Policy to allow authenticated users to insert weapon statistics for their team members
-DROP POLICY IF EXISTS "Allow authenticated users to insert weapon statistics" ON weapon_statistics;
-CREATE POLICY "Allow authenticated users to insert weapon statistics"
-ON weapon_statistics FOR INSERT
-TO authenticated
-WITH CHECK (EXISTS (SELECT 1 FROM team_members WHERE id = player_id AND user_id = auth.uid()));
+CREATE POLICY "Coaches can manage weapon stats" ON public.weapon_statistics
+    FOR ALL USING (
+        auth.uid() IN (
+            SELECT coach_id FROM public.teams t 
+            JOIN public.team_members tm ON t.id = tm.team_id 
+            WHERE tm.id = player_id
+        )
+    );
 
--- Policy to allow authenticated users to update their own weapon statistics
-DROP POLICY IF EXISTS "Allow authenticated users to update their weapon statistics" ON weapon_statistics;
-CREATE POLICY "Allow authenticated users to update their weapon statistics"
-ON weapon_statistics FOR UPDATE
-TO authenticated
-USING (EXISTS (SELECT 1 FROM team_members WHERE id = player_id AND user_id = auth.uid()))
-WITH CHECK (EXISTS (SELECT 1 FROM team_members WHERE id = player_id AND user_id = auth.uid()));
+-- AI recommendations policies
+CREATE POLICY "Team members can view recommendations" ON public.ai_training_recommendations
+    FOR SELECT USING (
+        auth.uid() IN (
+            SELECT user_id FROM public.team_members WHERE team_id = ai_training_recommendations.team_id
+            UNION
+            SELECT coach_id FROM public.teams WHERE id = ai_training_recommendations.team_id
+        )
+    );
 
--- Policy to allow authenticated users to delete their own weapon statistics
-DROP POLICY IF EXISTS "Allow authenticated users to delete their own weapon statistics" ON weapon_statistics;
-CREATE POLICY "Allow authenticated users to delete their own weapon statistics"
-ON weapon_statistics FOR DELETE
-TO authenticated
-USING (EXISTS (SELECT 1 FROM team_members WHERE id = player_id AND user_id = auth.uid()));
+CREATE POLICY "Coaches can manage recommendations" ON public.ai_training_recommendations
+    FOR ALL USING (
+        auth.uid() IN (SELECT coach_id FROM public.teams WHERE id = team_id)
+    );

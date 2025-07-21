@@ -1,7 +1,28 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import type { Player } from "@/types" // Import the common Player type
+
+interface Player {
+  id: string
+  full_name: string
+  valorant_username: string
+  valorant_tag: string
+  primary_role: string
+  current_rank: string
+  player_statistics: {
+    kills: number
+    deaths: number
+    acs: number
+    headshot_percentage: number
+    match_result: string
+    agent_used?: string
+  }[]
+  weapon_statistics?: {
+    weapon_name: string
+    kills: number
+    accuracy: number
+  }[]
+}
 
 interface TeamStats {
   totalPlayers: number
@@ -33,8 +54,7 @@ interface TeamStats {
   }>
 }
 
-export function useTeamStats(teamId: string, playersProp?: Player[]) {
-  // Renamed to playersProp to avoid conflict
+export function useTeamStats(teamId: string, players?: Player[]) {
   const [teamStats, setTeamStats] = useState<TeamStats>({
     totalPlayers: 0,
     averageKD: 0,
@@ -109,7 +129,7 @@ export function useTeamStats(teamId: string, playersProp?: Player[]) {
           }
         })
       } else {
-        // Default values if no stats
+        // Default values for players without stats
         totalKD += 1.0
         totalACS += 200
         totalHeadshot += 20
@@ -194,27 +214,21 @@ export function useTeamStats(teamId: string, playersProp?: Player[]) {
   }
 
   useEffect(() => {
-    if (playersProp && playersProp.length > 0) {
-      // If players are provided as a prop, use them directly
-      calculateStats(playersProp)
+    if (players) {
+      calculateStats(players)
     } else {
-      // Otherwise, try to load from localStorage
+      // Load from localStorage if no players provided
       const localPlayers = localStorage.getItem(`team_${teamId}_players`)
       if (localPlayers) {
         try {
-          const parsedPlayers: Player[] = JSON.parse(localPlayers)
+          const parsedPlayers = JSON.parse(localPlayers)
           calculateStats(parsedPlayers)
         } catch (error) {
-          console.error("Error parsing local players in useTeamStats:", error)
-          // Fallback to empty if local storage is corrupted
-          calculateStats([])
+          console.error("Error parsing local players:", error)
         }
-      } else {
-        // If no players prop and no local storage, default to empty
-        calculateStats([])
       }
     }
-  }, [teamId, playersProp]) // Depend on playersProp
+  }, [teamId, players])
 
   return teamStats
 }

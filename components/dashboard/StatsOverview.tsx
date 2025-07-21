@@ -3,14 +3,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, Target, TrendingUp, Award } from "lucide-react"
 import { useTeamStats } from "@/hooks/useTeamStats"
-import type { Player } from "@/types" // Import the common Player type
 
 interface StatsOverviewProps {
-  players: Player[] // Accept players as a prop
+  teamId?: string // Optional, if you have a default or single team
+  players?: any[] // Assuming players can be any[] for now, or define a more specific Player type if available
 }
 
-export function StatsOverview({ players }: StatsOverviewProps) {
-  const teamStats = useTeamStats("default-team", players) // Pass players to the hook
+export function StatsOverview({ teamId = "default-team", players }: StatsOverviewProps) {
+  const teamStats = useTeamStats(teamId, players)
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -32,7 +32,7 @@ export function StatsOverview({ players }: StatsOverviewProps) {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold text-blue-500">{teamStats.totalPlayers}</div>
-          <p className="text-xs text-gray-500">Current roster size</p>
+          <p className="text-xs text-gray-500">Currently on roster</p>
         </CardContent>
       </Card>
 
@@ -54,7 +54,7 @@ export function StatsOverview({ players }: StatsOverviewProps) {
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold text-purple-500">{teamStats.averageACS}</div>
-          <p className="text-xs text-gray-500">Team average combat score</p>
+          <p className="text-xs text-gray-500">Team average</p>
         </CardContent>
       </Card>
     </div>
