@@ -1,12 +1,25 @@
 export interface Player {
   id: string
-  name: string
-  gamertag: string
-  role: PlayerRole
-  rank: string
-  winRate: number
-  avatar?: string
-  stats: PlayerStats
+  full_name: string
+  valorant_username: string
+  valorant_tag: string
+  primary_role: string
+  current_rank: string
+  player_statistics: {
+    kills: number
+    deaths: number
+    acs: number
+    headshot_percentage: number
+    match_result: string
+    agent_used?: string
+  }[]
+  weapon_statistics?: {
+    weapon_name: string
+    kills: number
+    accuracy: number
+  }[]
+  created_at: string
+  aiAnalysisData?: any // For AI recommendations
 }
 
 export interface PlayerStats {
